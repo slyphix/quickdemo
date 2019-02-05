@@ -16,7 +16,7 @@ _default_options = {}
 
 _serialize_protocol_version = 1
 # reserved for future use
-_serialize_options = namedtuple('_serialize_options', [], defaults=[])
+_serialize_options = namedtuple('_serialize_options', [])
 
 # ----------------------------------------------------------------------------
 #   OPERATIONS
