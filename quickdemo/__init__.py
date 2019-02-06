@@ -97,23 +97,23 @@ class _demo:
 
     def with_function(self, *funcs):
         """Add the specified function to the run configuration."""
-        modified = copy.deepcopy(self)
-        modified._functions += funcs
+        modified = copy.copy(self)
+        modified._functions = self._functions + funcs
         return modified
 
     def with_group(self, *groups):
         """Add the specified group to the run configuration."""
-        modified = copy.deepcopy(self)
-        modified._groups |= set(groups)
+        modified = copy.copy(self)
+        modified._groups = self._groups | set(groups)
         return modified
 
     def with_args(self, *args, **kwargs):
         """Add the specified argument configuration to the run configuration."""
-        modified = copy.deepcopy(self)
+        modified = copy.copy(self)
         if len(args) > 0 and all(isinstance(arg, arguments) for arg in args):
-            modified._arguments.extend(args)
+            modified._arguments = self._arguments + list(args)
         else:
-            modified._arguments.append(arguments(*args, **kwargs))
+            modified._arguments = self._arguments + [arguments(*args, **kwargs)]
         return modified
 
     def with_args_iter(self, iterable):
@@ -127,21 +127,34 @@ class _demo:
                 raise DemoStateError("with_args_iter only accepts objects of type argument")
             all_args.append(element)
 
-        modified = copy.deepcopy(self)
-        modified._arguments.extend(all_args)
+        modified = copy.copy(self)
+        modified._arguments = self._arguments + all_args
         return modified
 
     def with_formatter(self, formatter):
         """Use the specified formatter for this run configuration."""
-        modified = copy.deepcopy(self)
-        modified._formatter = formatter
+        modified = copy.copy(self)
+        modified._formatter = copy.copy(formatter)
         return modified
 
     def with_options(self, **options):
         """Add the specified options to the run configuration."""
-        modified = copy.deepcopy(self)
+        modified = copy.copy(self)
+        modified._options = self._options.copy()
         modified._options.update(options)
         return modified
+
+    def merge(self, *others):
+        """Merge groups, functions and arguments this run configuration with one or more other run configurations."""
+        new = copy.copy(self)
+        new._functions = copy.copy(self._functions)
+        new._groups = copy.copy(self._groups)
+        new._arguments = copy.copy(self._arguments)
+        for o in others:
+            new._functions.extend(o._functions)
+            new._groups.update(o._groups)
+            new._arguments.extend(o._arguments)
+        return new
 
     def _slots(self):
         return (slot for slot in self.__slots__ if hasattr(self, slot))
@@ -201,7 +214,7 @@ class _demo:
                     self._formatter(run_result(func, ar, result))
 
     def store(self, file):
-        """Stores this run configuration in the specified file."""
+        """Store this run configuration in the specified file."""
         def write(output):
             # dump meta information
             pickle.dump((_serialize_protocol_version, options), output)
@@ -220,7 +233,7 @@ demo = _demo()
 
 
 def load(file):
-    """Deserializes the run configuration from the specified file."""
+    """Deserialize the run configuration from the specified file."""
     def read_file(input_file):
         output = _demo()
         # load meta information
