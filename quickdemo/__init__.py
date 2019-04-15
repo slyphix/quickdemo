@@ -22,6 +22,7 @@ _serialize_options = namedtuple('_serialize_options', [])
 #   OPERATIONS
 # ----------------------------------------------------------------------------
 
+
 class DemoStateError(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -98,7 +99,7 @@ class _demo:
     def with_function(self, *funcs):
         """Add the specified function to the run configuration."""
         modified = copy.copy(self)
-        modified._functions = self._functions + funcs
+        modified._functions = self._functions + list(funcs)
         return modified
 
     def with_group(self, *groups):

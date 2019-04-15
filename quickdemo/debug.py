@@ -1,5 +1,7 @@
 """debug submodule - Provides useful helpers for quick debugging."""
 
+from io import StringIO
+
 _indent_width = 4
 _indent_depth = 0
 
@@ -24,9 +26,13 @@ def dedent():
     _indent_depth = max(0, _indent_depth - 1)
 
 
-def show(*args):
-    global _indent_depth, _indent_width
-    print(" " * _indent_width * _indent_depth, *args, sep='')
+def print_indented(*args, **kwargs):
+    global _indent_depth
+    file = kwargs.pop('file', None)
+    buf = StringIO()
+    print(*args, file=buf, **kwargs)
+    padded = '\n'.join(' ' * _indent_depth + line for line in buf.getvalue().rstrip().split('\n'))
+    print(padded, file=file, end='\n')
 
 
 def catch(f):
@@ -38,3 +44,15 @@ def catch(f):
             return str(ex)
         return str(result)
     return wrapper
+
+
+def with_indent(delta=4):
+    def builder(f):
+        def wrapper(*args, **kwargs):
+            global _indent_depth
+            _indent_depth += delta
+            result = f(*args, **kwargs)
+            _indent_depth -= delta
+            return result
+        return wrapper
+    return builder

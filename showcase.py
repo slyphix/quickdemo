@@ -1,5 +1,6 @@
 import quickdemo as qd
 
+
 @qd.group(1, 'simple')
 @qd.run([1, 2, 3], 5)
 def add_to_list(input_list, number):
