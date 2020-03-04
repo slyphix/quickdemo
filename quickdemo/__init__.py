@@ -15,8 +15,6 @@ _default_formatter = fmt.fancy_printer
 _default_options = {}
 
 _serialize_protocol_version = 1
-# reserved for future use
-_serialize_options = namedtuple('_serialize_options', [])
 
 # ----------------------------------------------------------------------------
 #   OPERATIONS
@@ -31,7 +29,7 @@ class DemoStateError(Exception):
 def run(*args, **kwargs):
     """Run the decorated function with the specified arguments."""
     def wrapper(f):
-        demo.with_function(f).with_args(*args, **kwargs).run()
+        builder().with_function(f).with_args(*args, **kwargs).build().run()
         return f
     return wrapper
 
@@ -39,7 +37,7 @@ def run(*args, **kwargs):
 def apply(config):
     """Run the decorated function with the specified configuration."""
     def wrapper(f):
-        config.with_function(f).run()
+        config.builder().with_function(f).build().run()
         return f
     return wrapper
 
@@ -60,6 +58,10 @@ def reset_groups():
     _group_store.clear()
 
 
+def builder():
+    return _demobuilder()
+
+
 class arguments:
     """Stores arguments and keyword arguments used for function invocation."""
     __slots__ = 'args', 'kwargs'
@@ -77,7 +79,7 @@ class arguments:
         return not self == other
 
     def __repr__(self):
-        return f'arguments({formatters.args_string(self.args, self.kwargs)})'
+        return f"arguments({formatters.args_string(self.args, self.kwargs)})"
 
     def __str__(self):
         return repr(self)
@@ -86,36 +88,72 @@ class arguments:
 run_result = namedtuple('run_result', ['function', 'arguments', 'return_value'])
 
 
-class _demo:
+class _demobase:
     __slots__ = '_functions', '_groups', '_arguments', '_options', '_formatter'
 
+    def __init__(self, *, functions, groups, args, options, formatter):
+        self._functions = functions
+        self._groups = groups
+        self._arguments = args
+        self._options = options
+        self._formatter = formatter
+
+    @classmethod
+    def _copy_of(cls, inst):
+        """Copy all attributes of this instance to a newly created instance."""
+        new_inst = cls.__new__(cls)
+        for slot in cls.__slots__:
+            setattr(new_inst, slot, copy.deepcopy(getattr(inst, slot)))
+        return new_inst
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        return (
+            f"<{self.__class__.__name__} object with {len(self._functions)} function(s) | "
+            f"groups={self._groups}, arguments={self._arguments}, "
+            f"options={self._options}, formatter={self._formatter}>"
+        )
+
+    def __eq__(self, other):
+        return NotImplemented
+
+    def __ne__(self, other):
+        return NotImplemented
+
+
+class _demobuilder(_demobase):
+
     def __init__(self):
-        self._functions = []
-        self._groups = set()
-        self._arguments = []
-        self._options = _default_options
-        self._formatter = _default_formatter
+        super().__init__(
+            functions=[],
+            groups=set(),
+            args=[],
+            options=_default_options.copy(),
+            formatter=_default_formatter)
+
+    def build(self):
+        """Create a demo object using the current configuration."""
+        return _demo._copy_of(self)
 
     def with_function(self, *funcs):
         """Add the specified function to the run configuration."""
-        modified = copy.copy(self)
-        modified._functions = self._functions + list(funcs)
-        return modified
+        self._functions += list(funcs)
+        return self
 
     def with_group(self, *groups):
         """Add the specified group to the run configuration."""
-        modified = copy.copy(self)
-        modified._groups = self._groups | set(groups)
-        return modified
+        self._groups |= set(groups)
+        return self
 
     def with_args(self, *args, **kwargs):
         """Add the specified argument configuration to the run configuration."""
-        modified = copy.copy(self)
         if len(args) > 0 and all(isinstance(arg, arguments) for arg in args):
-            modified._arguments = self._arguments + list(args)
+            self._arguments += list(args)
         else:
-            modified._arguments = self._arguments + [arguments(*args, **kwargs)]
-        return modified
+            self._arguments += [arguments(*args, **kwargs)]
+        return self
 
     def with_args_iter(self, iterable):
         """Add the specified arguments to the run configuration.
@@ -128,67 +166,47 @@ class _demo:
                 raise DemoStateError("with_args_iter only accepts objects of type argument")
             all_args.append(element)
 
-        modified = copy.copy(self)
-        modified._arguments = self._arguments + all_args
-        return modified
+        self._arguments += all_args
+        return self
 
     def with_formatter(self, formatter):
         """Use the specified formatter for this run configuration."""
-        modified = copy.copy(self)
-        modified._formatter = copy.copy(formatter)
-        return modified
+        self._formatter = copy.copy(formatter)
+        return self
 
     def with_options(self, **options):
         """Add the specified options to the run configuration."""
-        modified = copy.copy(self)
-        modified._options = self._options.copy()
-        modified._options.update(options)
-        return modified
+        self._options.update(options)
+        return self
 
-    def merge(self, *others):
-        """Merge groups, functions and arguments this run configuration with one or more other run configurations."""
-        new = copy.copy(self)
-        new._functions = copy.copy(self._functions)
-        new._groups = copy.copy(self._groups)
-        new._arguments = copy.copy(self._arguments)
-        for o in others:
-            new._functions.extend(o._functions)
-            new._groups.update(o._groups)
-            new._arguments.extend(o._arguments)
-        return new
-
-    def _slots(self):
-        return (slot for slot in self.__slots__ if hasattr(self, slot))
-
-    def __copy__(self):
-        clone = type(self)()
-        for slot in self._slots():
-            setattr(clone, slot, getattr(self, slot))
-        return clone
-
-    def __deepcopy__(self, memo=None):
-        if not memo:
-            memo = {}
-        clone = type(self)()
-        for slot in self._slots():
-            setattr(clone, slot, copy.deepcopy(getattr(self, slot), memo))
-        return clone
-
-    def __str__(self):
-        return self.__repr__()
-
-    def __repr__(self):
+    def __getstate__(self):
         return (
-            f"<demo object with {len(self._functions)} functions | "
-            f"groups={self._groups}, arguments={self._arguments}, "
-            f"options={self._options}, formatter={self._formatter}>"
+            _serialize_protocol_version,
+            (self._arguments, self._options, self._formatter)
         )
 
-    def __eq__(self, other):
-        return NotImplemented
+    def __setstate__(self, state):
+        self.__init__()
+        version, data = state
+        if version != _serialize_protocol_version:
+            raise Warning("Different serialization protocol version detected. "
+                          "Importing may produce unexpected results.")
+        self._arguments, self._options, self._formatter = data
 
-    def __ne__(self, other):
-        return NotImplemented
+    def store(self, file):
+        """Store this run configuration in the specified file."""
+        if isinstance(file, str):
+            with open(file, 'wb') as actual_file:
+                pickle.dump(self, actual_file)
+        else:
+            pickle.dump(self, file)
+
+
+class _demo(_demobase):
+
+    def builder(self):
+        """Create a mutable builder from the current object state."""
+        return _demobuilder._copy_of(self)
 
     def _resolve_groups(self):
         global _group_store
@@ -214,39 +232,10 @@ class _demo:
                 if result is not None or self._get_option('print_none', default=False):
                     self._formatter(run_result(func, ar, result))
 
-    def store(self, file):
-        """Store this run configuration in the specified file."""
-        def write(output):
-            # dump meta information
-            pickle.dump((_serialize_protocol_version, options), output)
-            # dump class state
-            pickle.dump((self._arguments, self._options, self._formatter), output)
-
-        options = _serialize_options()
-        if isinstance(file, str):
-            with open(file, 'wb') as actual_file:
-                write(actual_file)
-        else:
-            write(file)
-
-
-demo = _demo()
-
 
 def load(file):
     """Deserialize the run configuration from the specified file."""
-    def read_file(input_file):
-        output = _demo()
-        # load meta information
-        pv, options = pickle.load(input_file)
-        if pv != _serialize_protocol_version:
-            raise Warning(f"'{file}' uses a different serialization protocol version."
-                          f"Importing may produce unexpected results.")
-        # load class state
-        output._arguments, output._options, output._formatter = pickle.load(input_file)
-        return output
-
     if isinstance(file, str):
         with open(file, 'rb') as actual_file:
-            return read_file(actual_file)
-    return read_file(file)
+            return pickle.load(actual_file)
+    return pickle.load(file)

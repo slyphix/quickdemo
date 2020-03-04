@@ -15,13 +15,21 @@ def add_to_list_alt(input_list, number):
     return output_list
 
 
-# select a group
-qd.demo.with_group(1).with_args([2] * 10, 20).with_formatter(qd.formatters.result_printer).run()
+# select one or multiple groups for batch execution
+builder = qd.builder().with_group(1).with_args([2] * 10, 20).with_formatter(qd.formatters.result_printer)
+simple_printer = builder.build()
 
-# run elaborate setup once
+# re-use existing configurations
+fancy_printer = builder.with_formatter(qd.formatters.fancy_printer).build()
+
+# execute configurations later
+simple_printer.run()
+fancy_printer.run()
+
+# run elaborate setup tasks once ...
 long_list = list(range(100))
 long_list[20:30] = range(10)
 
-# store configuration for later
-qd.demo.with_args(long_list, 1).store("config.qdc")
-qd.load("config.qdc").with_group('simple').run()
+# ... and store configuration for later
+qd.builder().with_args(long_list, 1).store("config.qdc")
+qd.load("config.qdc").with_group('simple').build().run()
