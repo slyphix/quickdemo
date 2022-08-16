@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="quickdemo",
-    version="0.1.0",
+    version="0.2.0",
     author="Justus 'slyphiX' Henneberg",
     author_email="slyphiX@users.noreply.github.com",
-    description="Small Python library for quick prototyping and code demonstrations",
+    description="Tiny Python library for code demonstrations and small-scale testing",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/slyphiX/quickdemo",
